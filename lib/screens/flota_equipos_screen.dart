@@ -692,7 +692,7 @@ class _FlotaEquiposScreenState extends State<FlotaEquiposScreen> {
                           tabs: [
                             Tab(text: '1. Ficha Técnica y Fluidos'),
                             Tab(text: '2. Despiece Interactivo CAD'),
-                            Tab(text: '3. Filtros y Repuestos'),
+                            Tab(text: '3. Despiece Oficial vs. Empírico'),
                             Tab(text: '4. Historial Partes y Taller'),
                           ],
                         ),
@@ -774,73 +774,243 @@ class _FlotaEquiposScreenState extends State<FlotaEquiposScreen> {
                           ),
                         ),
 
-                        // TAB 3: Filtros y Repuestos Compatibles
-                        ListView(
-                          padding: const EdgeInsets.all(18),
-                          children: [
-                            _buildSpecSectionTitle(
-                              'Filtros Equivalentes, Repuestos y Posición en Despiece',
-                            ),
-                            if (filtros.isEmpty)
-                              const Padding(
-                                padding: EdgeInsets.all(16),
-                                child: Text(
-                                  'Utiliza el catálogo general de filtros estándar según motorización en la pestaña Taller.',
-                                  style: TextStyle(color: Color(0xFF94A3B8)),
+                        // TAB 3: Despiece Oficial (CSV) vs. Despiece Empírico (Órdenes de Trabajo)
+                        Builder(
+                          builder: (tabCtx) {
+                            final despieceOficial = db.getDespieceOficialForEquipo(eq);
+                            final despieceEmpirico = db.getDespieceEmpiricoForEquipo(eq);
+                            return ListView(
+                              padding: const EdgeInsets.all(18),
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: _buildSpecSectionTitle(
+                                        '1. Despiece Oficial (`despiece_equipos` — ${despieceOficial.length} piezas)',
+                                      ),
+                                    ),
+                                    ElevatedButton.icon(
+                                      onPressed: () async {
+                                        await _showImportarDespieceCsvModal(context, eq);
+                                        if (mounted) setState(() {});
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF10B981),
+                                        foregroundColor: Colors.black,
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      ),
+                                      icon: const Icon(Icons.upload_file_rounded, size: 16),
+                                      label: const Text(
+                                        'Importar Despiece CSV',
+                                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                            ...filtros.map(
-                              (f) => Card(
-                                color: const Color(0xFF1E293B),
-                                margin: const EdgeInsets.only(bottom: 10),
-                                child: ListTile(
-                                  leading: CircleAvatar(
-                                    backgroundColor: const Color(0xFFF59E0B).withValues(alpha: 0.2),
-                                    child: const Icon(Icons.filter_alt_rounded, color: Color(0xFFF59E0B)),
-                                  ),
-                                  title: Text(
-                                    '${f.tipoComponente} — ${f.codigoOriginal}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 13.5,
+                                const SizedBox(height: 6),
+                                if (despieceOficial.isEmpty)
+                                  const Padding(
+                                    padding: EdgeInsets.all(12),
+                                    child: Text(
+                                      'Sin piezas cargadas aún en el Despiece Oficial. Usa el botón "Importar Despiece CSV" para cargar el manual.',
+                                      style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12.5),
                                     ),
                                   ),
-                                  subtitle: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Equivalencia: ${f.equivalenciaMannFram}',
-                                        style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12),
-                                      ),
-                                      Text(
-                                        'Plano Despiece: ${f.referenciaPlanoDespiece} · Ubicación: ${f.ubicacionEstanteria}',
-                                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5),
-                                      ),
-                                    ],
-                                  ),
-                                  trailing: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(
-                                        'Stock: ${f.stockActual}',
-                                        style: TextStyle(
-                                          color: f.stockCritico
-                                              ? const Color(0xFFEF4444)
-                                              : const Color(0xFF10B981),
-                                          fontWeight: FontWeight.w900,
+                                ...despieceOficial.map(
+                                  (ofItem) => Card(
+                                    color: const Color(0xFF1E293B),
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    child: ListTile(
+                                      dense: true,
+                                      leading: CircleAvatar(
+                                        radius: 16,
+                                        backgroundColor: const Color(0xFF38BDF8).withValues(alpha: 0.18),
+                                        child: const Icon(
+                                          Icons.verified_rounded,
+                                          color: Color(0xFF38BDF8),
+                                          size: 18,
                                         ),
                                       ),
-                                      Text(
-                                        'USD ${f.costoUnitarioUsd.toStringAsFixed(0)}',
-                                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                      title: Text(
+                                        '${ofItem['numero_parte_oem']} — ${ofItem['descripcion']}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 13,
+                                        ),
                                       ),
-                                    ],
+                                      subtitle: Text(
+                                        'Sistema: ${ofItem['sistema_nombre']} · Cant./Máquina: ${ofItem['cantidad_por_equipo']} · Origen: ${ofItem['origen']}',
+                                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5),
+                                      ),
+                                      trailing: Text(
+                                        'Pañol: ${ofItem['stock_actual']}',
+                                        style: const TextStyle(
+                                          color: Color(0xFF10B981),
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ),
-                          ],
+                                const SizedBox(height: 16),
+                                _buildSpecSectionTitle(
+                                  '2. Despiece Empírico (`repuestos_utilizados` en Taller — ${despieceEmpirico.length} piezas)',
+                                ),
+                                const Padding(
+                                  padding: EdgeInsets.only(bottom: 8),
+                                  child: Text(
+                                    'Se construye automáticamente a partir de los repuestos realmente consumidos en Órdenes de Trabajo sobre este equipo.',
+                                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                                  ),
+                                ),
+                                if (despieceEmpirico.isEmpty)
+                                  const Padding(
+                                    padding: EdgeInsets.all(12),
+                                    child: Text(
+                                      'Aún no se registran repuestos consumidos en órdenes de trabajo para este equipo.',
+                                      style: TextStyle(color: Color(0xFF64748B), fontSize: 12.5),
+                                    ),
+                                  ),
+                                ...despieceEmpirico.map((emp) {
+                                  final enOficial = emp['estaEnOficial'] == true;
+                                  return Card(
+                                    color: const Color(0xFF1E293B),
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    child: ListTile(
+                                      dense: true,
+                                      leading: CircleAvatar(
+                                        radius: 16,
+                                        backgroundColor: (enOficial
+                                                ? const Color(0xFF10B981)
+                                                : const Color(0xFFF59E0B))
+                                            .withValues(alpha: 0.2),
+                                        child: Icon(
+                                          enOficial ? Icons.check_circle_rounded : Icons.auto_fix_high_rounded,
+                                          color: enOficial
+                                              ? const Color(0xFF10B981)
+                                              : const Color(0xFFF59E0B),
+                                          size: 18,
+                                        ),
+                                      ),
+                                      title: Text(
+                                        '${emp['numero_parte_oem']} — ${emp['descripcion']}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                      subtitle: Text(
+                                        'Intervenciones: ${emp['veces_reemplazado']} · Total usado: ${emp['total_unidades_usadas']} u. · Último uso: ${emp['ultima_fecha_uso']}',
+                                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5),
+                                      ),
+                                      trailing: enOficial
+                                          ? Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: const Text(
+                                                'En Manual Oficial',
+                                                style: TextStyle(
+                                                  color: Color(0xFF10B981),
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            )
+                                          : TextButton.icon(
+                                              onPressed: () async {
+                                                await db.promoverPiezaEmpiricaADespieceOficial(
+                                                  equipo: eq,
+                                                  numeroParteOem: emp['numero_parte_oem'].toString(),
+                                                  descripcion: emp['descripcion'].toString(),
+                                                  sistemaNombre: emp['sistema_nombre'].toString(),
+                                                );
+                                                if (mounted) setState(() {});
+                                              },
+                                              icon: const Icon(
+                                                Icons.add_task_rounded,
+                                                size: 15,
+                                                color: Color(0xFFF59E0B),
+                                              ),
+                                              label: const Text(
+                                                'Sumar al Oficial',
+                                                style: TextStyle(
+                                                  color: Color(0xFFF59E0B),
+                                                  fontSize: 11.5,
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                              ),
+                                            ),
+                                    ),
+                                  );
+                                }),
+                                const SizedBox(height: 16),
+                                _buildSpecSectionTitle(
+                                  '3. Catálogo de Filtros Equivalentes y Ubicación en Pañol',
+                                ),
+                                ...filtros.map(
+                                  (f) => Card(
+                                    color: const Color(0xFF1E293B),
+                                    margin: const EdgeInsets.only(bottom: 10),
+                                    child: ListTile(
+                                      leading: CircleAvatar(
+                                        backgroundColor: const Color(0xFFF59E0B).withValues(alpha: 0.2),
+                                        child: const Icon(
+                                          Icons.filter_alt_rounded,
+                                          color: Color(0xFFF59E0B),
+                                        ),
+                                      ),
+                                      title: Text(
+                                        '${f.tipoComponente} — ${f.codigoOriginal}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 13.5,
+                                        ),
+                                      ),
+                                      subtitle: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Equivalencia: ${f.equivalenciaMannFram}',
+                                            style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12),
+                                          ),
+                                          Text(
+                                            'Plano Despiece: ${f.referenciaPlanoDespiece} · Ubicación: ${f.ubicacionEstanteria}',
+                                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5),
+                                          ),
+                                        ],
+                                      ),
+                                      trailing: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            'Stock: ${f.stockActual}',
+                                            style: TextStyle(
+                                              color: f.stockCritico
+                                                  ? const Color(0xFFEF4444)
+                                                  : const Color(0xFF10B981),
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
+                                          Text(
+                                            'USD ${f.costoUnitarioUsd.toStringAsFixed(0)}',
+                                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
                         ),
 
                         // TAB 4: Historial de Partes Diarios, Taller y Gastos
@@ -1391,6 +1561,94 @@ class _FlotaEquiposScreenState extends State<FlotaEquiposScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Future<void> _showImportarDespieceCsvModal(BuildContext context, EquipmentItem eq) async {
+    final db = ErpDatabaseService.instance;
+    final sampleCsv = 'codigo_interno,numero_parte_oem,descripcion_repuesto,sistema_nombre,cantidad_por_equipo\n'
+        '${eq.codigo},1R-1808,Filtro de Aceite de Motor Alta Eficiencia,Motor,1\n'
+        '${eq.codigo},1R-0749,Filtro de Combustible Secundario,Motor,1\n'
+        '${eq.codigo},1G-8878,Filtro Hidraulico de Transmision,Hidraulica,2\n'
+        '${eq.codigo},1U-3352,Diente / Una de Penetracion Serie J,Implementos y Corte,5';
+    final csvCtrl = TextEditingController(text: sampleCsv);
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF0F172A),
+        title: Row(
+          children: [
+            const Icon(Icons.upload_file_rounded, color: Color(0xFF10B981)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Importar Despiece Oficial CSV (${eq.codigo})',
+                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800),
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 640,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Pega o edita las filas CSV para alimentar `despiece_equipos`, `repuestos_catalogo` y `sistemas_maquinaria` (respeta la restricción UNIQUE equipo_id + repuesto_id + sistema_id):',
+                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12.5),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: csvCtrl,
+                maxLines: 9,
+                style: const TextStyle(
+                  color: Color(0xFFE2E8F0),
+                  fontFamily: 'monospace',
+                  fontSize: 12.5,
+                ),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: const Color(0xFF1E293B),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar', style: TextStyle(color: Color(0xFF94A3B8))),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              final count = await db.importarDespieceOficialCsv(csvCtrl.text);
+              if (ctx.mounted) {
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    backgroundColor: const Color(0xFF065F46),
+                    content: Text(
+                      'Se importaron $count piezas al Despiece Oficial (`despiece_equipos`) y se sincronizaron con el servidor MySQL.',
+                    ),
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF10B981),
+              foregroundColor: Colors.black,
+            ),
+            icon: const Icon(Icons.cloud_upload_rounded, size: 17),
+            label: const Text(
+              'Importar a MySQL (`despiece_equipos`)',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
       ),
     );
   }

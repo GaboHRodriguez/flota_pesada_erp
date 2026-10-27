@@ -39,6 +39,8 @@ class ErpDatabaseService extends ChangeNotifier {
   List<GastoEquipo> _gastosEquipos = [];
   List<MovimientoObra> _movimientosObra = [];
   List<String> _auditLogs = [];
+  List<Map<String, dynamic>> _despieceOficialRemote = [];
+  List<Map<String, dynamic>> _despieceEmpiricoRemote = [];
 
   List<AppUser> get usuarios => List.unmodifiable(_usuarios);
   List<ObraSite> get obras => List.unmodifiable(_obras);
@@ -154,6 +156,17 @@ class ErpDatabaseService extends ChangeNotifier {
           );
         }).toList();
       }
+    }
+
+    if (data['despieceOficial'] is List) {
+      _despieceOficialRemote = (data['despieceOficial'] as List)
+          .whereType<Map<String, dynamic>>()
+          .toList();
+    }
+    if (data['despieceEmpirico'] is List) {
+      _despieceEmpiricoRemote = (data['despieceEmpirico'] as List)
+          .whereType<Map<String, dynamic>>()
+          .toList();
     }
 
     // Actualizar partes diarios desde tabla remota `partediario`
@@ -1022,5 +1035,183 @@ class ErpDatabaseService extends ChangeNotifier {
     _obras.insert(0, nueva);
     _addAudit('Nuevo Frente de Obra habilitado: ${nueva.nombreObra}.');
     await _persist();
+  }
+
+  // ==================== DESPIECE OFICIAL (CSV) VS. DESPIECE EMPÍRICO ====================
+
+  List<Map<String, dynamic>> getDespieceOficialForEquipo(EquipmentItem eq) {
+    final result = <Map<String, dynamic>>[];
+    final seenOem = <String>{};
+
+    // 1. Filas provenientes de `despiece_equipos` (MySQL o CSV importado)
+    for (final row in _despieceOficialRemote) {
+      final rEqId = int.tryParse((row['equipo_id'] ?? '').toString());
+      final rCod = (row['codigo_interno'] ?? '').toString().trim().toUpperCase();
+      if (rEqId == eq.id || rCod == eq.codigo.trim().toUpperCase()) {
+        final oem = (row['numero_parte_oem'] ?? '').toString().trim();
+        final sist = (row['sistema_nombre'] ?? 'Motor').toString().trim();
+        final key = '${oem.toUpperCase()}|${sist.toUpperCase()}';
+        if (seenOem.add(key)) {
+          result.add({
+            'numero_parte_oem': oem,
+            'descripcion': (row['repuesto_descripcion'] ?? 'Repuesto Oficial').toString(),
+            'sistema_nombre': sist,
+            'cantidad_por_equipo': int.tryParse((row['cantidad_por_equipo'] ?? '1').toString()) ?? 1,
+            'stock_actual': int.tryParse((row['stock_actual'] ?? '0').toString()) ?? 0,
+            'origen': 'CSV / Base Oficial',
+          });
+        }
+      }
+    }
+
+    // 2. Complementar con catálogo compatible local (`FiltroRepuestoItem`)
+    for (final f in getFiltrosForEquipo(eq.codigo)) {
+      final sist = f.tipoComponente.toLowerCase().contains('hidr')
+          ? 'Hidráulica'
+          : (f.tipoComponente.toLowerCase().contains('diente') ||
+                  f.tipoComponente.toLowerCase().contains('cuchilla'))
+              ? 'Implementos y Corte'
+              : 'Motor';
+      final key = '${f.codigoOriginal.trim().toUpperCase()}|${sist.toUpperCase()}';
+      if (seenOem.add(key)) {
+        result.add({
+          'numero_parte_oem': f.codigoOriginal,
+          'descripcion': '${f.tipoComponente} (${f.equivalenciaMannFram})',
+          'sistema_nombre': sist,
+          'cantidad_por_equipo': 1,
+          'stock_actual': f.stockActual,
+          'origen': 'Catálogo OEM',
+        });
+      }
+    }
+    return result;
+  }
+
+  List<Map<String, dynamic>> getDespieceEmpiricoForEquipo(EquipmentItem eq) {
+    final oficialOems = getDespieceOficialForEquipo(eq)
+        .map((e) => (e['numero_parte_oem'] ?? '').toString().trim().toUpperCase())
+        .toSet();
+
+    final byOem = <String, Map<String, dynamic>>{};
+
+    // 1. Filas remotas de `repuestos_utilizados` + `ordenes_trabajo`
+    for (final row in _despieceEmpiricoRemote) {
+      final rEqId = int.tryParse((row['equipo_id'] ?? '').toString());
+      final rCod = (row['codigo_interno'] ?? '').toString().trim().toUpperCase();
+      if (rEqId == eq.id || rCod == eq.codigo.trim().toUpperCase()) {
+        final oem = (row['numero_parte_oem'] ?? '').toString().trim();
+        if (oem.isEmpty) continue;
+        byOem[oem.toUpperCase()] = {
+          'numero_parte_oem': oem,
+          'descripcion': (row['repuesto_descripcion'] ?? 'Repuesto utilizado en OT').toString(),
+          'sistema_nombre': 'Taller / OT',
+          'veces_reemplazado': int.tryParse((row['veces_reemplazado'] ?? '1').toString()) ?? 1,
+          'total_unidades_usadas':
+              int.tryParse((row['total_unidades_usadas'] ?? '1').toString()) ?? 1,
+          'ultima_fecha_uso': (row['ultima_fecha_uso'] ?? 'Reciente').toString(),
+          'estaEnOficial': oficialOems.contains(oem.toUpperCase()),
+        };
+      }
+    }
+
+    // 2. Analizar órdenes de taller (`_informesTaller`) de este equipo
+    final ots = getInformesForEquipo(eq.id);
+    for (final ot in ots) {
+      final rawParts = [
+        ot.repuestosUtilizados,
+        ot.filtrosUtilizados,
+      ].where((s) => s.trim().isNotEmpty).join(', ');
+      if (rawParts.isEmpty) continue;
+
+      final tokens = rawParts.split(RegExp(r'[,;\n]+'));
+      for (final rawToken in tokens) {
+        final token = rawToken.trim();
+        if (token.isEmpty) continue;
+        final oemMatch = RegExp(r'([A-Z0-9]{2,}-[A-Z0-9\-]+|[A-Z]{2,}\d{3,})')
+            .firstMatch(token.toUpperCase());
+        final oemCode = oemMatch != null ? oemMatch.group(0)! : token.toUpperCase();
+        final existing = byOem[oemCode];
+        if (existing != null) {
+          existing['veces_reemplazado'] = (existing['veces_reemplazado'] as int) + 1;
+          existing['total_unidades_usadas'] = (existing['total_unidades_usadas'] as int) + 1;
+        } else {
+          byOem[oemCode] = {
+            'numero_parte_oem': oemCode,
+            'descripcion': token,
+            'sistema_nombre': ot.sistemaAfectado,
+            'veces_reemplazado': 1,
+            'total_unidades_usadas': 1,
+            'ultima_fecha_uso': ot.fecha,
+            'estaEnOficial': oficialOems.contains(oemCode.toUpperCase()),
+          };
+        }
+      }
+    }
+
+    return byOem.values.toList();
+  }
+
+  Future<int> importarDespieceOficialCsv(String csvContent) async {
+    final lines = csvContent.split(RegExp(r'\r\n|\r|\n'));
+    int count = 0;
+
+    for (final rawLine in lines) {
+      final line = rawLine.trim();
+      if (line.isEmpty || line.toLowerCase().startsWith('codigo_interno')) continue;
+      final parts = line.split(',').map((s) => s.trim()).toList();
+      if (parts.length < 4) continue;
+
+      final codInterno = parts[0];
+      final numParteOem = parts[1];
+      final descRep = parts[2];
+      final sistNombre = parts[3];
+      final cant = parts.length >= 5 ? (int.tryParse(parts[4]) ?? 1) : 1;
+
+      final eq = _equipos.cast<EquipmentItem?>().firstWhere(
+            (e) => e != null && e.codigo.toUpperCase() == codInterno.toUpperCase(),
+            orElse: () => null,
+          );
+      final eqId = eq?.id ?? 1;
+
+      _despieceOficialRemote.removeWhere(
+        (r) =>
+            (r['codigo_interno'] ?? '').toString().toUpperCase() == codInterno.toUpperCase() &&
+            (r['numero_parte_oem'] ?? '').toString().toUpperCase() == numParteOem.toUpperCase() &&
+            (r['sistema_nombre'] ?? '').toString().toUpperCase() == sistNombre.toUpperCase(),
+      );
+
+      _despieceOficialRemote.add({
+        'equipo_id': eqId,
+        'codigo_interno': codInterno,
+        'numero_parte_oem': numParteOem,
+        'repuesto_descripcion': descRep,
+        'sistema_nombre': sistNombre,
+        'cantidad_por_equipo': cant,
+        'stock_actual': 5,
+      });
+      count++;
+    }
+
+    _addAudit('Importación CSV de Despiece Oficial (`despiece_equipos`): $count piezas procesadas.');
+    await _persist();
+
+    if (!_offlineMode && count > 0) {
+      await RemoteApiClient.postJson(
+        _buildEndpoint('importar_despiece_csv'),
+        {'csv': csvContent},
+      );
+    }
+    notifyListeners();
+    return count;
+  }
+
+  Future<void> promoverPiezaEmpiricaADespieceOficial({
+    required EquipmentItem equipo,
+    required String numeroParteOem,
+    required String descripcion,
+    required String sistemaNombre,
+  }) async {
+    final csvLine = '${equipo.codigo},$numeroParteOem,$descripcion,$sistemaNombre,1';
+    await importarDespieceOficialCsv(csvLine);
   }
 }
