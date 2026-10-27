@@ -100,7 +100,7 @@ class ErpDatabaseService extends ChangeNotifier {
     _connectedToRemoteMySql = true;
     _lastSyncTime = DateTime.now();
 
-    // Actualizar estados de equipos desde la tabla remota `equipos`
+    // Actualizar estados y horas_motor de equipos desde la tabla remota `equipos`
     if (data['equipos'] is List) {
       final remoteList = data['equipos'] as List;
       final remoteById = <int, Map<String, dynamic>>{};
@@ -115,11 +115,45 @@ class ErpDatabaseService extends ChangeNotifier {
         if (r == null) return localEq;
         final estadoRemoto = (r['estado'] ?? '').toString().trim();
         final domRemoto = (r['dominio'] ?? '').toString().trim();
+        final horasRemotas = double.tryParse((r['horas_motor'] ?? '').toString());
         return localEq.copyWith(
           estado: estadoRemoto.isNotEmpty ? estadoRemoto : localEq.estado,
           dominio: domRemoto.isNotEmpty ? domRemoto : localEq.dominio,
+          lecturaActual: (horasRemotas != null && horasRemotas > 0)
+              ? horasRemotas
+              : localEq.lecturaActual,
         );
       }).toList();
+    }
+
+    // Actualizar stock del Pañol desde `repuestos_catalogo`
+    if (data['repuestosCatalogo'] is List && (data['repuestosCatalogo'] as List).isNotEmpty) {
+      final stockByOem = <String, int>{};
+      for (final raw in (data['repuestosCatalogo'] as List)) {
+        if (raw is Map<String, dynamic>) {
+          final oem = (raw['numero_parte_oem'] ?? '').toString().trim().toUpperCase();
+          final st = int.tryParse((raw['stock_actual'] ?? '0').toString()) ?? 0;
+          if (oem.isNotEmpty) stockByOem[oem] = st;
+        }
+      }
+      if (stockByOem.isNotEmpty) {
+        _filtrosRepuestos = _filtrosRepuestos.map((item) {
+          final st = stockByOem[item.codigoOriginal.trim().toUpperCase()];
+          if (st == null) return item;
+          return FiltroRepuestoItem(
+            id: item.id,
+            codigoOriginal: item.codigoOriginal,
+            equivalenciaMannFram: item.equivalenciaMannFram,
+            tipoComponente: item.tipoComponente,
+            equiposCompatiblesCodigos: item.equiposCompatiblesCodigos,
+            stockActual: st,
+            stockMinimo: item.stockMinimo,
+            costoUnitarioUsd: item.costoUnitarioUsd,
+            ubicacionEstanteria: item.ubicacionEstanteria,
+            referenciaPlanoDespiece: item.referenciaPlanoDespiece,
+          );
+        }).toList();
+      }
     }
 
     // Actualizar partes diarios desde tabla remota `partediario`
