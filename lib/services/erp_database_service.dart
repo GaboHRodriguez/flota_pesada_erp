@@ -89,10 +89,19 @@ class ErpDatabaseService extends ChangeNotifier {
     }
   }
 
-  /// Lee en tiempo real desde https://funcioncreativa.com.ar/eqp/api.php?action=bootstrap
+  /// Lee en tiempo real desde `./api.php` (XAMPP / FTP actual) o `https://funcioncreativa.com.ar/eqp/api.php`
   Future<bool> sincronizarDesdeServidorRemoto() async {
     if (_offlineMode) return false;
-    final data = await RemoteApiClient.getJson(_buildEndpoint('bootstrap'));
+    Map<String, dynamic>? data;
+    if (kIsWeb) {
+      data = await RemoteApiClient.getJson('./api.php?action=bootstrap');
+      if (data != null && data['ok'] == true) {
+        _windowsServerUrl = './api.php';
+      }
+    }
+    if (data == null || data['ok'] != true) {
+      data = await RemoteApiClient.getJson(_buildEndpoint('bootstrap'));
+    }
     if (data == null || data['ok'] != true) {
       _connectedToRemoteMySql = false;
       notifyListeners();
@@ -1065,7 +1074,7 @@ class ErpDatabaseService extends ChangeNotifier {
     }
 
     // 2. Complementar con catálogo compatible local (`FiltroRepuestoItem`)
-    for (final f in getFiltrosForEquipo(eq.codigo)) {
+    for (final f in getFiltrosParaEquipo(eq)) {
       final sist = f.tipoComponente.toLowerCase().contains('hidr')
           ? 'Hidráulica'
           : (f.tipoComponente.toLowerCase().contains('diente') ||
@@ -1115,7 +1124,7 @@ class ErpDatabaseService extends ChangeNotifier {
     }
 
     // 2. Analizar órdenes de taller (`_informesTaller`) de este equipo
-    final ots = getInformesForEquipo(eq.id);
+    final ots = getInformesPorEquipo(eq.id);
     for (final ot in ots) {
       final rawParts = [
         ot.repuestosUtilizados,
