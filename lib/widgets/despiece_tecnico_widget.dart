@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
+import '../data/equipment_schematics_catalog.dart';
 import '../models/erp_models.dart';
 
 class DespieceSubsystem {
   final int id;
   final String code;
+  final String label;
   final String title;
   final String subtitle;
-  final Offset normalizedPos; // 0..1 on schematic canvas
+  final Offset normalizedPos; // 0..1 on schematic canvas (x/400, y/200)
   final IconData icon;
   final Color color;
   final List<String> specs;
@@ -15,6 +17,7 @@ class DespieceSubsystem {
   const DespieceSubsystem({
     required this.id,
     required this.code,
+    required this.label,
     required this.title,
     required this.subtitle,
     required this.normalizedPos,
@@ -42,95 +45,107 @@ class DespieceTecnicoWidget extends StatefulWidget {
 class _DespieceTecnicoWidgetState extends State<DespieceTecnicoWidget> {
   int _selectedIndex = 0;
 
-  List<DespieceSubsystem> _buildSubsystems(EquipmentItem eq) {
-    return [
-      DespieceSubsystem(
-        id: 1,
+  List<DespieceSubsystem> _buildSubsystems(
+    EquipmentItem eq,
+    EquipmentSchematicSpec schematic,
+  ) {
+    final baseSpecs = [
+      (
         code: 'GRP-01',
-        title: 'Motorización, Inyección y Filtrado',
-        subtitle: 'Block Motor ${eq.marcaNombre} · Serie ${eq.nMotor.isEmpty ? "OEM Estándar" : eq.nMotor}',
-        normalizedPos: const Offset(0.26, 0.42),
+        subtitle:
+            'Conjunto Principal ${eq.marcaNombre} · Serie ${eq.nMotor.isEmpty ? "OEM Estándar" : eq.nMotor}',
         icon: Icons.settings_input_component_rounded,
         color: const Color(0xFFF59E0B),
-        oemReference: 'Lámina 01-04 · Conjunto Motor y Alimentación ${eq.tipoCombustible}',
+        oemRef: 'Lámina 01-04 · ${schematic.nombre} — Nodo 1',
         specs: [
-          'Potencia Nominal: ${eq.potencia.toStringAsFixed(0)} ${eq.unidadPotencia}',
-          'Combustible: ${eq.tipoCombustible} (Tanque: ${eq.capacidadTanqueLts.toStringAsFixed(0)} Lts)',
-          'Lubricante Motor: ${eq.aceiteMotorSpec}',
+          'Potencia Nominal: ${eq.potencia > 0 ? "${eq.potencia.toStringAsFixed(0)} ${eq.unidadPotencia}" : "Según especificación de fábrica"}',
+          'Alimentación / Energía: ${eq.tipoCombustible} (Capacidad: ${eq.capacidadTanqueLts.toStringAsFixed(0)} Lts)',
+          'Lubricante / Fluido Primario: ${eq.aceiteMotorSpec}',
           'Intervalo Preventivo: Cada ${eq.intervaloService.toStringAsFixed(0)} ${eq.categoria.meterUnit}',
         ],
       ),
-      DespieceSubsystem(
-        id: 2,
+      (
         code: 'GRP-02',
-        title: 'Sistema Hidráulico de Potencia y Cilindros',
-        subtitle: 'Bomba Principal, Banco de Válvulas y Líneas de Alta Presión',
-        normalizedPos: const Offset(0.58, 0.34),
+        subtitle: 'Sistema Secundario, Cuerpo de Trabajo y Fluido de Potencia',
         icon: Icons.compress_rounded,
         color: const Color(0xFF0EA5E9),
-        oemReference: 'Lámina 11-14 · Circuito Hidráulico y Actuadores',
+        oemRef: 'Lámina 11-14 · ${schematic.nombre} — Nodo 2',
         specs: [
-          'Fluido Hidráulico: ${eq.aceiteHidraulicoSpec}',
-          'Capacidad del Sistema: ${eq.capacidad > 0 ? "${eq.capacidad.toStringAsFixed(0)} ${eq.unidadCapacidad}" : "Según nivel de visor"}',
-          'Mangueras de Trabajo: SAE 100R2AT / 4SP con terminales JIC',
-          'Control de Fugas: Revisar vástagos, retenes y racores en cada turno',
+          'Fluido / Hidráulica: ${eq.aceiteHidraulicoSpec}',
+          'Capacidad Operativa: ${eq.capacidad > 0 ? "${eq.capacidad.toStringAsFixed(0)} ${eq.unidadCapacidad}" : "Según nivel nominal"}',
+          'Inspección Técnica: Control de estanqueidad, mangueras, uniones y estructura',
+          'Filtros Compatibles Registrados: ${widget.filtrosCompatibles.length} códigos en catálogo',
         ],
       ),
-      DespieceSubsystem(
-        id: 3,
+      (
         code: 'GRP-03',
-        title: 'Transmisión, Convertidor y Mandos Finales',
-        subtitle: 'Tracción: ${eq.traccionNombre} · Chasis ${eq.nChasis.isEmpty ? "Reforzado" : eq.nChasis}',
-        normalizedPos: const Offset(0.42, 0.68),
+        subtitle:
+            'Tren de Fuerza / Chasis (${eq.traccionNombre}) · Serie ${eq.nChasis.isEmpty ? "Reforzado" : eq.nChasis}',
         icon: Icons.all_inclusive_rounded,
         color: const Color(0xFF10B981),
-        oemReference: 'Lámina 08-10 · Tren de Fuerza y Reductores',
+        oemRef: 'Lámina 08-10 · ${schematic.nombre} — Nodo 3',
         specs: [
-          'Especificación Lubricante: ${eq.aceiteTransmisionSpec}',
-          'Tipo de Tracción: ${eq.traccionNombre}',
-          'Inspección: Nivel en caliente, temperatura de convertidor y respiraderos',
+          'Especificación Transmisión / Ejes: ${eq.aceiteTransmisionSpec}',
+          'Configuración de Rodaje: ${eq.traccionNombre}',
           'Chasis / Bastidor: ${eq.nChasis.isEmpty ? "Sin número registrado" : eq.nChasis}',
+          'Control Preventivo: Revisar anclajes, rodamientos, bujes y desgaste estructural',
         ],
       ),
-      DespieceSubsystem(
-        id: 4,
+      (
         code: 'GRP-04',
-        title: 'Herramienta de Corte / Trabajo y Articulaciones',
-        subtitle: 'Balde, Vertedera, Pluma, Pernos y Bujes de Desgaste',
-        normalizedPos: const Offset(0.82, 0.54),
+        subtitle: 'Órgano de Trabajo, Desgaste, Frenos o Salida de Potencia',
         icon: Icons.construction_rounded,
         color: const Color(0xFFEC4899),
-        oemReference: 'Lámina 18-22 · Implemento Frontal / Trasero y Desgaste',
+        oemRef: 'Lámina 18-22 · ${schematic.nombre} — Nodo 4',
         specs: [
-          'Lubricación de Pernos: Grasa de Litio EP2 con MoS2 cada 10 hs',
-          'Elementos de Desgaste: Uñas/Dientes, Cuchillas reversibles y Cantoneras',
-          'Holgura Axial: Controlar bujes de balancín y articulación central',
+          'Lubricación y Ajuste: Grasa de Litio EP2 / Control de torque y holguras en cada turno',
+          'Elementos de Desgaste: Inspección visual de fatiga, fisuras y espesores útiles',
+          'Dominio / Identificación: ${eq.dominio.isEmpty ? eq.codigo : eq.dominio}',
           'Notas Técnicas: ${eq.notasTecnicas}',
         ],
       ),
-      DespieceSubsystem(
-        id: 5,
+      (
         code: 'GRP-05',
-        title: 'Cabina, Instrumental y Sistema Eléctrico 12V/24V',
-        subtitle: 'Alternador, Arranque, Sensores de Horómetro y Seguridad',
-        normalizedPos: const Offset(0.42, 0.24),
+        subtitle: 'Puesto de Mando, Instrumental, Seguridad y Protección',
         icon: Icons.electrical_services_rounded,
         color: const Color(0xFFA855F7),
-        oemReference: 'Lámina 25-28 · Instalación Eléctrica y Tablero',
+        oemRef: 'Lámina 25-28 · ${schematic.nombre} — Nodo 5',
         specs: [
           'Lectura Actual: ${eq.lecturaActual.toStringAsFixed(0)} ${eq.categoria.meterUnit}',
-          'Próximo Service: ${eq.proximoServiceLectura.toStringAsFixed(0)} ${eq.categoria.meterUnit}',
-          'Seguridad Operativa: Alarma de retroceso, baliza LED, corte de corriente',
-          'Estado Actual: ${eq.estado}',
+          'Próximo Service Programado: ${eq.proximoServiceLectura.toStringAsFixed(0)} ${eq.categoria.meterUnit}',
+          'Responsable Asignado: ${eq.responsableActual}',
+          'Estado Operativo Actual: ${eq.estado}',
         ],
       ),
     ];
+
+    return List.generate(schematic.hotspots.length, (i) {
+      final h = schematic.hotspots[i];
+      final b = baseSpecs[i % baseSpecs.length];
+      return DespieceSubsystem(
+        id: h.id,
+        code: b.code,
+        label: h.label,
+        title: '${h.label} (${schematic.nombre})',
+        subtitle: b.subtitle,
+        normalizedPos: h.normalizedPos,
+        icon: b.icon,
+        color: b.color,
+        oemReference: '${b.oemRef} · ${h.label}',
+        specs: [
+          'Punto de Inspección #${h.id}: ${h.label} (Coord. CAD: X=${h.x.toInt()}, Y=${h.y.toInt()})',
+          ...b.specs,
+        ],
+      );
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final subsystems = _buildSubsystems(widget.equipo);
-    final selected = subsystems[_selectedIndex];
+    final schematic = EquipmentSchematicsCatalog.forEquipment(widget.equipo);
+    final subsystems = _buildSubsystems(widget.equipo, schematic);
+    final safeIndex = _selectedIndex.clamp(0, subsystems.length - 1);
+    final selected = subsystems[safeIndex];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -151,14 +166,28 @@ class _DespieceTecnicoWidgetState extends State<DespieceTecnicoWidget> {
                   const Icon(Icons.schema_rounded, color: Color(0xFFF59E0B), size: 20),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      'PLANO DE DESPIECE INTERACTIVO — ${widget.equipo.codigo} (${widget.equipo.marcaNombre} ${widget.equipo.modeloNombre})',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13,
-                        letterSpacing: 0.4,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'PLANO DE DESPIECE INTERACTIVO — ${widget.equipo.codigo} (${widget.equipo.marcaNombre} ${widget.equipo.modeloNombre})',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Categoría CAD: ${schematic.nombre} · Rubro: ${widget.equipo.tipoEquipoNombre}',
+                          style: const TextStyle(
+                            color: Color(0xFF38BDF8),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   Container(
@@ -175,74 +204,90 @@ class _DespieceTecnicoWidgetState extends State<DespieceTecnicoWidget> {
                 ],
               ),
               const SizedBox(height: 12),
-              // Lienzo CAD con puntos interactivos
-              SizedBox(
-                height: 210,
-                width: double.infinity,
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    return Stack(
-                      children: [
-                        Positioned.fill(
-                          child: CustomPaint(
-                            painter: _BlueprintSchematicPainter(
-                              categoria: widget.equipo.categoria,
-                              selectedIndex: _selectedIndex,
-                              subsystems: subsystems,
-                            ),
-                          ),
-                        ),
-                        for (int i = 0; i < subsystems.length; i++)
-                          Positioned(
-                            left: (subsystems[i].normalizedPos.dx * constraints.maxWidth) - 20,
-                            top: (subsystems[i].normalizedPos.dy * constraints.maxHeight) - 20,
-                            child: GestureDetector(
-                              onTap: () => setState(() => _selectedIndex = i),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                width: _selectedIndex == i ? 42 : 34,
-                                height: _selectedIndex == i ? 42 : 34,
-                                decoration: BoxDecoration(
-                                  color: _selectedIndex == i
-                                      ? subsystems[i].color
-                                      : const Color(0xFF1E293B).withValues(alpha: 0.92),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: _selectedIndex == i ? Colors.white : subsystems[i].color,
-                                    width: _selectedIndex == i ? 2.5 : 1.8,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: subsystems[i].color.withValues(alpha: 0.45),
-                                      blurRadius: _selectedIndex == i ? 12 : 4,
-                                    ),
-                                  ],
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  '${i + 1}',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: _selectedIndex == i ? 15 : 13,
-                                  ),
+              // Lienzo CAD con proporción 400x200 y puntos interactivos exactos
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 560),
+                  child: AspectRatio(
+                    aspectRatio:
+                        EquipmentSchematicsCatalog.viewBoxSize.width /
+                        EquipmentSchematicsCatalog.viewBoxSize.height,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final w = constraints.maxWidth;
+                        final h = constraints.maxHeight;
+                        return Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Positioned.fill(
+                              child: CustomPaint(
+                                painter: _BlueprintSchematicPainter(
+                                  schematic: schematic,
+                                  selectedIndex: safeIndex,
+                                  subsystems: subsystems,
                                 ),
                               ),
                             ),
-                          ),
-                      ],
-                    );
-                  },
+                            for (int i = 0; i < subsystems.length; i++)
+                              Positioned(
+                                left: (subsystems[i].normalizedPos.dx * w) -
+                                    (safeIndex == i ? 19 : 15),
+                                top: (subsystems[i].normalizedPos.dy * h) -
+                                    (safeIndex == i ? 19 : 15),
+                                child: Tooltip(
+                                  message: '${subsystems[i].id}. ${subsystems[i].label}',
+                                  child: GestureDetector(
+                                    onTap: () => setState(() => _selectedIndex = i),
+                                    child: AnimatedContainer(
+                                      duration: const Duration(milliseconds: 200),
+                                      width: safeIndex == i ? 38 : 30,
+                                      height: safeIndex == i ? 38 : 30,
+                                      decoration: BoxDecoration(
+                                        color: safeIndex == i
+                                            ? subsystems[i].color
+                                            : const Color(0xFF0F172A).withValues(alpha: 0.92),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: safeIndex == i
+                                              ? Colors.white
+                                              : subsystems[i].color,
+                                          width: safeIndex == i ? 2.5 : 1.8,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: subsystems[i].color.withValues(alpha: 0.5),
+                                            blurRadius: safeIndex == i ? 12 : 4,
+                                          ),
+                                        ],
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        '${subsystems[i].id}',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: safeIndex == i ? 14 : 12,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(height: 10),
-              // Selector de subsistemas en chips
+              const SizedBox(height: 12),
+              // Selector de hotspots en chips con los nombres específicos del JSON
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: List.generate(subsystems.length, (i) {
                     final s = subsystems[i];
-                    final isSel = i == _selectedIndex;
+                    final isSel = i == safeIndex;
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: ChoiceChip(
@@ -252,7 +297,7 @@ class _DespieceTecnicoWidgetState extends State<DespieceTecnicoWidget> {
                         backgroundColor: const Color(0xFF1E293B),
                         side: BorderSide(color: isSel ? s.color : const Color(0xFF334155)),
                         label: Text(
-                          '${i + 1}. ${s.code}',
+                          '${s.id}. ${s.label}',
                           style: TextStyle(
                             color: isSel ? Colors.white : const Color(0xFF94A3B8),
                             fontWeight: isSel ? FontWeight.w700 : FontWeight.w500,
@@ -268,7 +313,7 @@ class _DespieceTecnicoWidgetState extends State<DespieceTecnicoWidget> {
           ),
         ),
         const SizedBox(height: 12),
-        // Detalle del Subsistema seleccionado
+        // Detalle del Subsistema / Hotspot seleccionado
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -292,7 +337,7 @@ class _DespieceTecnicoWidgetState extends State<DespieceTecnicoWidget> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '${selected.code} — ${selected.title}',
+                          'Nodo #${selected.id} (${selected.code}) — ${selected.title}',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w800,
@@ -301,7 +346,11 @@ class _DespieceTecnicoWidgetState extends State<DespieceTecnicoWidget> {
                         ),
                         Text(
                           selected.oemReference,
-                          style: TextStyle(color: selected.color, fontSize: 12, fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            color: selected.color,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
                     ),
@@ -336,134 +385,189 @@ class _DespieceTecnicoWidgetState extends State<DespieceTecnicoWidget> {
 }
 
 class _BlueprintSchematicPainter extends CustomPainter {
-  final AssetCategory categoria;
+  final EquipmentSchematicSpec schematic;
   final int selectedIndex;
   final List<DespieceSubsystem> subsystems;
 
   _BlueprintSchematicPainter({
-    required this.categoria,
+    required this.schematic,
     required this.selectedIndex,
     required this.subsystems,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Grid blueprint
+    // Fondo de cuadrícula blueprint
     final gridPaint = Paint()
       ..color = const Color(0xFF1E293B)
       ..strokeWidth = 1;
 
-    const step = 24.0;
-    for (double x = 0; x < size.width; x += step) {
+    const step = 20.0;
+    for (double x = 0; x <= size.width; x += step) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
     }
-    for (double y = 0; y < size.height; y += step) {
+    for (double y = 0; y <= size.height; y += step) {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
     }
 
+    final sx = size.width / EquipmentSchematicsCatalog.viewBoxSize.width;
+    final sy = size.height / EquipmentSchematicsCatalog.viewBoxSize.height;
+
     final linePaint = Paint()
-      ..color = const Color(0xFF38BDF8).withValues(alpha: 0.65)
+      ..color = EquipmentSchematicsCatalog.strokeColor
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0;
+      ..strokeWidth = EquipmentSchematicsCatalog.strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
 
     final fillPaint = Paint()
-      ..color = const Color(0xFF0EA5E9).withValues(alpha: 0.08)
+      ..color = EquipmentSchematicsCatalog.strokeColor.withValues(alpha: 0.10)
       ..style = PaintingStyle.fill;
 
-    final w = size.width;
-    final h = size.height;
+    canvas.save();
+    canvas.scale(sx, sy);
 
-    // Dibujo técnico esquemático según categoría (Maquinaria Pesada / Vehículo / Herramienta)
-    final bodyPath = Path();
-    if (categoria == AssetCategory.maquinariaPesada) {
-      // Silueta técnica de Retroexcavadora / Pala Cargadora
-      // Oruga / Tren rodante inferior
-      final trackRect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(w * 0.16, h * 0.62, w * 0.44, h * 0.20),
-        const Radius.circular(14),
-      );
-      canvas.drawRRect(trackRect, fillPaint);
-      canvas.drawRRect(trackRect, linePaint);
+    _renderSvgMarkup(canvas, schematic.svgPaths, linePaint, fillPaint);
 
-      // Ruedas dentadas / rodillos internos
-      for (double rx = 0.22; rx <= 0.54; rx += 0.08) {
-        canvas.drawCircle(Offset(w * rx, h * 0.72), 9, linePaint);
-      }
+    canvas.restore();
 
-      // Chasis / Compartimiento Motor y Cabina
-      bodyPath.moveTo(w * 0.14, h * 0.60);
-      bodyPath.lineTo(w * 0.14, h * 0.36);
-      bodyPath.lineTo(w * 0.34, h * 0.36);
-      bodyPath.lineTo(w * 0.36, h * 0.16);
-      bodyPath.lineTo(w * 0.50, h * 0.16);
-      bodyPath.lineTo(w * 0.54, h * 0.60);
-      bodyPath.close();
-      canvas.drawPath(bodyPath, fillPaint);
-      canvas.drawPath(bodyPath, linePaint);
-
-      // Pluma y Brazo Hidráulico (Boom & Stick)
-      final armPath = Path()
-        ..moveTo(w * 0.52, h * 0.46)
-        ..lineTo(w * 0.68, h * 0.22)
-        ..lineTo(w * 0.84, h * 0.46)
-        ..lineTo(w * 0.78, h * 0.52)
-        ..lineTo(w * 0.66, h * 0.32)
-        ..lineTo(w * 0.52, h * 0.54)
-        ..close();
-      canvas.drawPath(armPath, fillPaint);
-      canvas.drawPath(armPath, linePaint);
-
-      // Balde excavador / cargador
-      final bucketPath = Path()
-        ..moveTo(w * 0.78, h * 0.48)
-        ..lineTo(w * 0.90, h * 0.48)
-        ..arcToPoint(Offset(w * 0.82, h * 0.68), radius: const Radius.circular(22))
-        ..close();
-      canvas.drawPath(bucketPath, fillPaint);
-      canvas.drawPath(bucketPath, linePaint);
-    } else {
-      // Silueta técnica de Camión / Camioneta / Equipo Vial
-      bodyPath.moveTo(w * 0.14, h * 0.65);
-      bodyPath.lineTo(w * 0.14, h * 0.42);
-      bodyPath.lineTo(w * 0.28, h * 0.42);
-      bodyPath.lineTo(w * 0.34, h * 0.22);
-      bodyPath.lineTo(w * 0.48, h * 0.22);
-      bodyPath.lineTo(w * 0.48, h * 0.32);
-      bodyPath.lineTo(w * 0.86, h * 0.32);
-      bodyPath.lineTo(w * 0.86, h * 0.65);
-      bodyPath.close();
-      canvas.drawPath(bodyPath, fillPaint);
-      canvas.drawPath(bodyPath, linePaint);
-
-      canvas.drawCircle(Offset(w * 0.26, h * 0.70), 18, linePaint);
-      canvas.drawCircle(Offset(w * 0.70, h * 0.70), 18, linePaint);
-      canvas.drawCircle(Offset(w * 0.80, h * 0.70), 18, linePaint);
-    }
-
-    // Líneas de cota conectando los nodos de despiece
+    // Líneas guía sutiles conectando los hotspots
     final connPaint = Paint()
-      ..color = const Color(0xFF64748B).withValues(alpha: 0.45)
-      ..strokeWidth = 1.2;
+      ..color = const Color(0xFF64748B).withValues(alpha: 0.35)
+      ..strokeWidth = 1.1;
 
     for (int i = 0; i < subsystems.length - 1; i++) {
-      final p1 = Offset(subsystems[i].normalizedPos.dx * w, subsystems[i].normalizedPos.dy * h);
-      final p2 = Offset(subsystems[i + 1].normalizedPos.dx * w, subsystems[i + 1].normalizedPos.dy * h);
+      final p1 = Offset(
+        subsystems[i].normalizedPos.dx * size.width,
+        subsystems[i].normalizedPos.dy * size.height,
+      );
+      final p2 = Offset(
+        subsystems[i + 1].normalizedPos.dx * size.width,
+        subsystems[i + 1].normalizedPos.dy * size.height,
+      );
       canvas.drawLine(p1, p2, connPaint);
     }
 
-    // Halo pulsante en el nodo seleccionado
+    // Halo resaltado en el hotspot activo
     if (selectedIndex >= 0 && selectedIndex < subsystems.length) {
       final sel = subsystems[selectedIndex];
-      final center = Offset(sel.normalizedPos.dx * w, sel.normalizedPos.dy * h);
+      final center = Offset(
+        sel.normalizedPos.dx * size.width,
+        sel.normalizedPos.dy * size.height,
+      );
       final haloPaint = Paint()
-        ..color = sel.color.withValues(alpha: 0.22)
+        ..color = sel.color.withValues(alpha: 0.24)
         ..style = PaintingStyle.fill;
-      canvas.drawCircle(center, 32, haloPaint);
+      canvas.drawCircle(center, 28, haloPaint);
     }
+  }
+
+  void _renderSvgMarkup(
+    Canvas canvas,
+    String svgMarkup,
+    Paint strokePaint,
+    Paint fillPaint,
+  ) {
+    final tagRegex = RegExp(r'<(path|circle|rect)\s+([^>]+?)/?>', caseSensitive: false);
+    for (final match in tagRegex.allMatches(svgMarkup)) {
+      final tag = match.group(1)!.toLowerCase();
+      final attrs = _parseAttrs(match.group(2)!);
+
+      if (tag == 'path') {
+        final d = attrs['d'];
+        if (d != null && d.isNotEmpty) {
+          final path = _parseSvgPathData(d);
+          canvas.drawPath(path, fillPaint);
+          canvas.drawPath(path, strokePaint);
+        }
+      } else if (tag == 'circle') {
+        final cx = double.tryParse(attrs['cx'] ?? '') ?? 0;
+        final cy = double.tryParse(attrs['cy'] ?? '') ?? 0;
+        final r = double.tryParse(attrs['r'] ?? '') ?? 0;
+        if (r > 0) {
+          canvas.drawCircle(Offset(cx, cy), r, fillPaint);
+          canvas.drawCircle(Offset(cx, cy), r, strokePaint);
+        }
+      } else if (tag == 'rect') {
+        final x = double.tryParse(attrs['x'] ?? '') ?? 0;
+        final y = double.tryParse(attrs['y'] ?? '') ?? 0;
+        final w = double.tryParse(attrs['width'] ?? '') ?? 0;
+        final h = double.tryParse(attrs['height'] ?? '') ?? 0;
+        final rx = double.tryParse(attrs['rx'] ?? '') ?? 0;
+        final rect = Rect.fromLTWH(x, y, w, h);
+        if (rx > 0) {
+          final rrect = RRect.fromRectAndRadius(rect, Radius.circular(rx));
+          canvas.drawRRect(rrect, fillPaint);
+          canvas.drawRRect(rrect, strokePaint);
+        } else {
+          canvas.drawRect(rect, fillPaint);
+          canvas.drawRect(rect, strokePaint);
+        }
+      }
+    }
+  }
+
+  Map<String, String> _parseAttrs(String raw) {
+    final map = <String, String>{};
+    final attrRegex = RegExp(r'''([a-zA-Z0-9_-]+)\s*=\s*['"]([^'"]*)['"]''');
+    for (final m in attrRegex.allMatches(raw)) {
+      map[m.group(1)!.toLowerCase()] = m.group(2)!;
+    }
+    return map;
+  }
+
+  Path _parseSvgPathData(String d) {
+    final path = Path();
+    final tokenRegex = RegExp(r'[MmLlAaZz]|[-+]?\d*\.?\d+');
+    final tokens = tokenRegex.allMatches(d).map((m) => m.group(0)!).toList();
+
+    int i = 0;
+    String cmd = '';
+    while (i < tokens.length) {
+      final t = tokens[i];
+      if (RegExp(r'^[MmLlAaZz]$').hasMatch(t)) {
+        cmd = t;
+        i++;
+        if (cmd == 'Z' || cmd == 'z') {
+          path.close();
+          continue;
+        }
+      }
+
+      if (cmd == 'M' && i + 1 < tokens.length) {
+        final x = double.parse(tokens[i++]);
+        final y = double.parse(tokens[i++]);
+        path.moveTo(x, y);
+        cmd = 'L';
+      } else if (cmd == 'L' && i + 1 < tokens.length) {
+        final x = double.parse(tokens[i++]);
+        final y = double.parse(tokens[i++]);
+        path.lineTo(x, y);
+      } else if (cmd == 'A' && i + 6 < tokens.length) {
+        final rx = double.parse(tokens[i++]);
+        final ry = double.parse(tokens[i++]);
+        final xAxisRot = double.parse(tokens[i++]);
+        final largeArc = double.parse(tokens[i++]) != 0;
+        final sweep = double.parse(tokens[i++]) != 0;
+        final x = double.parse(tokens[i++]);
+        final y = double.parse(tokens[i++]);
+        path.arcToPoint(
+          Offset(x, y),
+          radius: Radius.elliptical(rx, ry),
+          rotation: xAxisRot,
+          largeArc: largeArc,
+          clockwise: sweep,
+        );
+      } else {
+        i++;
+      }
+    }
+    return path;
   }
 
   @override
   bool shouldRepaint(covariant _BlueprintSchematicPainter oldDelegate) {
-    return oldDelegate.selectedIndex != selectedIndex || oldDelegate.categoria != categoria;
+    return oldDelegate.selectedIndex != selectedIndex ||
+        oldDelegate.schematic.key != schematic.key;
   }
 }

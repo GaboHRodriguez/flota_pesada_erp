@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../data/equipment_schematics_catalog.dart';
 import '../models/erp_models.dart';
 import '../services/erp_database_service.dart';
 
@@ -654,7 +655,10 @@ class _TallerMantenimientoScreenState extends State<TallerMantenimientoScreen> {
       text: existing?.lubricantesUtilizados ?? selectedEq.aceiteMotorSpec,
     );
     final repuestosCtrl = TextEditingController(text: existing?.repuestosUtilizados ?? '');
-    final sistemaCtrl = TextEditingController(text: existing?.sistemaAfectado ?? 'Motor e Hidráulica');
+    final initialSchematic = EquipmentSchematicsCatalog.forEquipment(selectedEq);
+    final sistemaCtrl = TextEditingController(
+      text: existing?.sistemaAfectado ?? initialSchematic.hotspots.first.label,
+    );
     final costoRepCtrl = TextEditingController(
       text: (existing?.costoRepuestos ?? 185).toStringAsFixed(0),
     );
@@ -710,6 +714,8 @@ class _TallerMantenimientoScreenState extends State<TallerMantenimientoScreen> {
                           selectedEq = eq;
                           horometroCtrl.text = eq.lecturaActual.toStringAsFixed(0);
                           lubCtrl.text = eq.aceiteMotorSpec;
+                          sistemaCtrl.text =
+                              EquipmentSchematicsCatalog.forEquipment(eq).hotspots.first.label;
                         });
                       }
                     },
@@ -876,6 +882,43 @@ class _TallerMantenimientoScreenState extends State<TallerMantenimientoScreen> {
                       labelText: 'Otros Repuestos / Materiales Utilizados',
                       labelStyle: TextStyle(color: Color(0xFF94A3B8)),
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Hotspots de categoría (${EquipmentSchematicsCatalog.forEquipment(selectedEq).nombre}):',
+                      style: const TextStyle(
+                        color: Color(0xFF38BDF8),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: EquipmentSchematicsCatalog.forEquipment(selectedEq)
+                        .hotspots
+                        .map(
+                          (h) => ActionChip(
+                            backgroundColor: sistemaCtrl.text == h.label
+                                ? const Color(0xFF38BDF8).withValues(alpha: 0.25)
+                                : const Color(0xFF0F172A),
+                            side: BorderSide(
+                              color: sistemaCtrl.text == h.label
+                                  ? const Color(0xFF38BDF8)
+                                  : const Color(0xFF334155),
+                            ),
+                            label: Text(
+                              '${h.id}. ${h.label}',
+                              style: const TextStyle(color: Colors.white, fontSize: 11),
+                            ),
+                            onPressed: () => setDialogState(() => sistemaCtrl.text = h.label),
+                          ),
+                        )
+                        .toList(),
                   ),
                   const SizedBox(height: 8),
                   Row(
